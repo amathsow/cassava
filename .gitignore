@@ -1,5 +1,5 @@
 *.zip
-*.hdF5
+*.hdf5
 extraimages/
 train/
 test/
