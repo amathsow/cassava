@@ -10,7 +10,7 @@ import random
 # Make size slightly larger than the crop size in order to add a little
 # more variation
 SIZE = (256, 256)
-TEST_RUN = True
+TEST_RUN = False
 TEST_SUBSET_DATA = False
 
 if TEST_RUN:
