@@ -1,5 +1,5 @@
 from keras.models import Model
-from keras.layers import Input, Conv2D, Dense, MaxPool2D, Dropout, Concatenate, Flatten, GlobalMaxPooling2D
+from keras.layers import Input, Conv2D, Dense, MaxPool2D, Dropout, Concatenate, Flatten, GlobalMaxPooling2D, Subtract
 from keras.losses import sparse_categorical_crossentropy
 from keras.preprocessing.image import ImageDataGenerator
 from keras.utils import to_categorical
@@ -16,13 +16,14 @@ class EgoCNN:
     def __init__(self, in_size, out_size,
                  batch_size=10,
                  handle=None,
-                 xrange=(-3,4), yrange=(-3,4),
+                 xrange=(-3,4), yrange=(-3,4), lscale=7,
                  trange=(-3,4), tbins=20):
         self.in_size = in_size
         self.out_size = out_size
         self.batch_size = batch_size
         self.xrange = xrange
         self.yrange = yrange
+        self.lscale = lbins
         self.trange = trange
         self.tbins = tbins
         self.model = self.ego_cnn()
@@ -50,11 +51,11 @@ class EgoCNN:
         if bottom_shape==None:
             raise Exception('bcnn_shape or output_shape not specified (None)')
         input_streams = Input(shape=bottom_shape)
-        x = Dense(100, activation='relu')(input_streams)
-        x = Dropout(rate=.5)(x)
-        Y = Flatten()(x)
+        x = GlobalMaxPooling2D()(input_streams)
+        x = Dense(200, activation='relu')(x)
+        Y = Dropout(rate=.5)(x)
         return Model(input_streams, Y)
-    
+        
     def ego_cnn(self):
         '''
         Keras model putting together bottom and top NN
@@ -64,8 +65,10 @@ class EgoCNN:
         in_stream1 = Input(shape=self.in_size, name='input0')
         in_stream2 = Input(shape=self.in_size, name='input1')
         bottom = self.bcnn()# self.in_size
-        middle = Concatenate()([bottom(in_stream1), bottom(in_stream2)])
-        middle_size = tuple(a*b for a,b in zip(bottom.output_shape[1:],[1,1,2]))
+        #middle = Concatenate()([bottom(in_stream1), bottom(in_stream2)])
+        #middle_size = tuple(a*b for a,b in zip(bottom.output_shape[1:],[1,1,2]))
+        middle = Subtract()([bottom(in_stream1), bottom(in_stream2)])
+        middle_size = bottom.output_shape[1:]
         top = self.tcnn(middle_size)
         output = top(middle)
         output = [Dense(size, activation='softmax', name=f'output{num}')(output)
@@ -98,7 +101,9 @@ class EgoCNN:
             # group them in tbins
             z_rotat = np.digitize(z_rotat, np.linspace(*self.trange, self.tbins+1, endpoint=True))
             # group each x, y , z transformation in a list of batch_size dictionaries
-            trans_list = [{'theta': t,'lx': x,'ly': y} for t, x, y in zip(z_rotat, x_trans, y_trans)]
+            trans_list = [{'theta': t,'lx': x*self.lscale,'ly': y*self.lscale} 
+            				for t, x, y 
+            				in zip(z_rotat, x_trans, y_trans)]
             # apply transformations to a batch (hdf5 dataset accepts lists not np.arrays)
             datagen = ImageDataGenerator()
             Xbatch_trans = np.array([datagen.apply_transform(img,tran) 
@@ -107,9 +112,9 @@ class EgoCNN:
             Xbatch = handle[list(indices)]
             # turning classes into categorical values
             #classes need to be positive
-            Ybatch_tx = to_categorical(x_trans-self.xrange[0], sum(np.absolute(self.xrange))) 
+            Ybatch_tx = to_categorical(x_trans/self.lscale-self.xrange[0], sum(np.absolute(self.xrange))) 
             #classes need to be positive
-            Ybatch_ty = to_categorical(y_trans-self.yrange[0], sum(np.absolute(self.yrange))) 
+            Ybatch_ty = to_categorical(y_trans/self.lscale-self.yrange[0], sum(np.absolute(self.yrange))) 
             Ybatch_rot = to_categorical(z_rotat-1, self.tbins) #classes need to start from 0
             #yield (Xbatch, Xbatch_trans), (Ybatch_trans, Ybatch_rot)
             yield ({'input0': Xbatch, 'input1': Xbatch_trans},
@@ -123,18 +128,12 @@ class EgoDense(EgoCNN):
                             input_shape=self.in_size,
                             pooling=None)
         return model
+
     
-    def tcnn(self, bottom_shape=None):
-        '''
-        Fully connected layers to be plugged on top of the concat siamese CNNs.
-        bottom_shape: output shape of one of the bottom CNNs
-        y1_shape: number of classes/bins for lateral motion
-        y2_shape: number of classes/bins for rotation angles
-        '''
-        if bottom_shape==None:
-            raise Exception('bcnn_shape or output_shape not specified (None)')
-        input_streams = Input(shape=bottom_shape)
-        x = GlobalMaxPooling2D()(input_streams)
-        x = Dense(100, activation='relu')(x)
-        Y = Dropout(rate=.5)(x)
-        return Model(input_streams, Y)
+class EgoInception(EgoCNN):
+    def bcnn(self):
+        model = InceptionV3(include_top=False,
+                            weights='imagenet',
+                            input_shape=self.in_size,
+                            pooling=None)
+        return model
