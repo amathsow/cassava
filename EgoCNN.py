@@ -1,9 +1,12 @@
 from keras.models import Model
-from keras.layers import Input, Conv2D, Dense, MaxPool2D, Dropout, Concatenate, Flatten, GlobalMaxPooling2D, Subtract
+from keras.layers import (Input, Conv2D, Dense, MaxPool2D, Dropout,
+                          Concatenate, Flatten, GlobalMaxPooling2D,
+                          Subtract, Add)
 from keras.losses import sparse_categorical_crossentropy
 from keras.preprocessing.image import ImageDataGenerator
 from keras.utils import to_categorical
 from keras.applications.densenet import DenseNet169
+from keras.applications.mobilenet_v2 import MobileNetV2
 import matplotlib.pyplot as plt
 import numpy as np
 import keras.backend as K
@@ -23,7 +26,7 @@ class EgoCNN:
         self.batch_size = batch_size
         self.xrange = xrange
         self.yrange = yrange
-        self.lscale = lbins
+        self.lscale = lscale
         self.trange = trange
         self.tbins = tbins
         self.model = self.ego_cnn()
@@ -39,6 +42,7 @@ class EgoCNN:
         x = MaxPool2D(pool_size=(3,3))(x)
         x = Conv2D(256, kernel_size=(3,3), strides=(1,1), padding='same', activation='relu')(x)
         x = MaxPool2D(pool_size=(3,3), name='bcnn_output')(x)
+        x = Conv2D(64, kernel_size=(1,1), activation='relu')(x)
         return Model(input_tensor, x)     
     
     def tcnn(self, bottom_shape=None):
@@ -51,8 +55,10 @@ class EgoCNN:
         if bottom_shape==None:
             raise Exception('bcnn_shape or output_shape not specified (None)')
         input_streams = Input(shape=bottom_shape)
-        x = GlobalMaxPooling2D()(input_streams)
-        x = Dense(200, activation='relu')(x)
+        #x = GlobalMaxPooling2D()(input_streams)
+        #x = Dense(200, activation='relu')(x)
+        x = Flatten()(input_streams)
+        x = Dense(100, activation='relu')(x)
         Y = Dropout(rate=.5)(x)
         return Model(input_streams, Y)
         
@@ -64,11 +70,11 @@ class EgoCNN:
         '''
         in_stream1 = Input(shape=self.in_size, name='input0')
         in_stream2 = Input(shape=self.in_size, name='input1')
-        bottom = self.bcnn()# self.in_size
-        #middle = Concatenate()([bottom(in_stream1), bottom(in_stream2)])
-        #middle_size = tuple(a*b for a,b in zip(bottom.output_shape[1:],[1,1,2]))
-        middle = Subtract()([bottom(in_stream1), bottom(in_stream2)])
-        middle_size = bottom.output_shape[1:]
+        bottom = self.bcnn()
+        middle = Concatenate()([bottom(in_stream1), bottom(in_stream2)])
+        middle_size = tuple(a*b for a,b in zip(bottom.output_shape[1:],[1,1,2]))
+        #middle = Add()([bottom(in_stream1), bottom(in_stream2)])
+        #middle_size = bottom.output_shape[1:]
         top = self.tcnn(middle_size)
         output = top(middle)
         output = [Dense(size, activation='softmax', name=f'output{num}')(output)
@@ -129,10 +135,19 @@ class EgoDense(EgoCNN):
                             pooling=None)
         return model
 
-    
+
 class EgoInception(EgoCNN):
     def bcnn(self):
         model = InceptionV3(include_top=False,
+                            weights='imagenet',
+                            input_shape=self.in_size,
+                            pooling=None)
+        return model
+
+
+class EgoMobile(EgoCNN):
+    def bcnn(self):
+        model = MobileNetV2(include_top=False,
                             weights='imagenet',
                             input_shape=self.in_size,
                             pooling=None)
