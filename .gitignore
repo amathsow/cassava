@@ -5,4 +5,5 @@ extraimages/
 train/
 test/
 validation/
+.vscode/
 __pycache__
