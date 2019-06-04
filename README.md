@@ -10,8 +10,8 @@ Competition winners used SE-ResNets and DenseNets on the labelled dataset, gener
 
 Overall, my increase in accuracy from 81% to 85% based on just pretraining on an auxiliary ask shows to be promising
 
+Datasets available at https://www.kaggle.com/c/cassava-disease/data
+
 [1] *Learning Representations for Automatic Colorization.* Larsson, Gustav and Maire, Michael and Shakhnarovich, Gregory. ECCV 2016
-
 [2] *Unsupervised Learning of Visual Representations by Solving Jigsaw Puzzles.* Noroozi, Mehdi and Favaro, Paolo. ECCV 2016
-
 [3] *Learning to See by Moving.* Agrawal, Pulkit and Carreira, Joao and Malik, Jitendra. ICCV 2015
