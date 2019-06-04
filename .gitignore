@@ -4,4 +4,5 @@
 extraimages/
 train/
 test/
+validation/
 __pycache__
